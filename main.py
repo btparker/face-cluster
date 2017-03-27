@@ -2,7 +2,6 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     import networkx as nx
     from face_recognition.api import _face_distance
     from random import shuffle
-    import json
 
     nodes = []
     edges = []
@@ -16,7 +15,9 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     for idx, face_encoding_to_check in enumerate(encodings):
         # Adding node of facial encoding
         node_id = idx+1
-        node = (node_id, {'class': image_paths[idx], 'path': image_paths[idx]})
+
+        # Initialize 'cluster' to unique value (cluster of itself)
+        node = (node_id, {'cluster': image_paths[idx], 'path': image_paths[idx]})
         nodes.append(node)
 
         # Facial encodings to compare
@@ -36,81 +37,98 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     G.add_nodes_from(nodes)
     G.add_edges_from(edges)
 
-    for z in range(0,iterations):
-        gn = G.nodes()
-        # I randomize the nodes to give me an arbitrary start point
-        shuffle(gn)
-        for node in gn:
-            neighs = G[node]
-            classes = {}
-            # do an inventory of the given nodes neighbours and edge weights
-            for ne in neighs:
-                if isinstance(ne, int) :
-                    if G.node[ne]['class'] in classes:
-                        classes[G.node[ne]['class']] += G[node][ne]['weight']
+    for _ in range(0, iterations):
+        cluster_nodes = G.nodes()
+        shuffle(cluster_nodes)
+        for node in cluster_nodes:
+            neighbors = G[node]
+            clusters = {}
+
+            # do an inventory of the given nodes neighbors and edge weights
+            for ne in neighbors:
+                if isinstance(ne, int):
+                    if G.node[ne]['cluster'] in clusters:
+                        clusters[G.node[ne]['cluster']] += G[node][ne]['weight']
                     else:
-                        classes[G.node[ne]['class']] = G[node][ne]['weight']
+                        clusters[G.node[ne]['cluster']] = G[node][ne]['weight']
 
             # find the class with the highest edge weight sum
-            max = 0
-            maxclass = 0
-            for c in classes:
-                if classes[c] > max:
-                    max = classes[c]
-                    maxclass = c
+            edge_weight_sum = 0
+            max_cluster = 0
+            for cluster in clusters:
+                if clusters[cluster] > edge_weight_sum:
+                    edge_weight_sum = clusters[cluster]
+                    max_cluster = cluster
 
             # set the class of target node to the winning local class
-            G.node[node]['class'] = maxclass
+            G.node[node]['cluster'] = max_cluster
 
     clusters = {}
 
     # Prepare cluster output
     for (_, data) in G.node.items():
-
-        node_class = data['class']
+        cluster = data['cluster']
         path = data['path']
 
-        if node_class:
-            if node_class not in clusters:
-                clusters[node_class] = []
+        if cluster:
+            if cluster not in clusters:
+                clusters[cluster] = []
+            clusters[cluster].append(path)
 
-            clusters[node_class].append(path)
     # Sort cluster output
     sorted_clusters = sorted(clusters.values(), key=len, reverse=True)
 
     return sorted_clusters
 
-def main(args):
-    import face_recognition
-    from glob import glob
-    from os.path import join, basename, exists
-    from os import makedirs
-    import itertools
-    import json
-    import numpy as np
-    import shutil
+def cluster_facial_encodings(facial_encodings):
+    # Only use the chinese whispers algorithm for now
+    return chinese_whispers(facial_encodings.items())
 
-    # Facial encodings
+def compute_facial_encodings(image_paths):
+    import face_recognition
+
     facial_encodings = {}
-    for idx, image_path in enumerate(glob(join(args.input, '*.jpg'))):
-        print("Encoding '{}' ...".format(image_path))
+    for idx, image_path in enumerate(image_paths):
+        print "Encoding '{}' ...".format(image_path)
         picture = face_recognition.load_image_file(image_path)
         results = face_recognition.face_encodings(picture)
         if len(results) == 1:
             facial_encodings[image_path] = results[0]
-            print("... stored")
+            print "... stored"
         else:
-            print("... image does not have just one face, skipping")
+            print "... image does not have just one face, skipping"
 
+    return facial_encodings
+
+def main(args):
+    from glob import glob
+    from os.path import join, basename, exists
+    from os import makedirs
+    import numpy as np
+    import shutil
+    import sys
+
+    # Facial encodings
+    image_paths = glob(join(args.input, '*.jpg'))
+
+    if len(image_paths) == 0:
+        print("No jpg images found in {}, exiting...".format(args.input))
+        sys.exit(0)
+
+    facial_encodings = compute_facial_encodings(image_paths)
+
+    # Save facial encodings
     with open(join(args.output, 'facial_encodings.npy'), 'w') as outfile:
         np.save(outfile, facial_encodings)
 
-    encoding_list = facial_encodings.items()
-    sorted_clusters = chinese_whispers(encoding_list)
+    # Compute facial clusters, return as sorted
+    sorted_clusters = cluster_facial_encodings(facial_encodings)
 
+    # Save clusters
     with open(join(args.output, 'facial_clusters.npy'), 'w') as outfile:
         np.save(outfile, sorted_clusters)
 
+    # Copy image files to cluster folders
     for idx, cluster in enumerate(sorted_clusters):
         cluster_name = str(idx).zfill(4)
         cluster_dir = join(args.output, cluster_name)
@@ -131,5 +149,4 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    main(parse_args())
