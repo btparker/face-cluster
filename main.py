@@ -9,6 +9,10 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
 
     image_paths, encodings = zip(*encoding_list)
 
+    if len(encodings) <= 1:
+        print("Not enough encodings to cluster!")
+        return []
+
     for idx, face_encoding_to_check in enumerate(encodings):
         # Adding node of facial encoding
         node_id = idx+1
