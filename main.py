@@ -1,7 +1,17 @@
-def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
+""" Face Cluster """
+
+def _create_graph_from_encodings(encoding_list, threshold=0.6):
+    """ Create Graph from Facial Encodings
+
+    Inputs:
+        encoding_list: a list of facial encodings from face_recognition
+        threshold: facial match threshold
+
+    Outputs:
+        G: graph of facial encodings as nodes and distances as edges
+    """
     import networkx as nx
     from face_recognition.api import _face_distance
-    from random import shuffle
 
     nodes = []
     edges = []
@@ -9,11 +19,10 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     image_paths, encodings = zip(*encoding_list)
 
     if len(encodings) <= 1:
-        print("Not enough encodings to cluster!")
+        print "Not enough encodings to cluster!"
         return []
 
     for idx, face_encoding_to_check in enumerate(encodings):
-        
         # Adding node of facial encoding
         node_id = idx+1
 
@@ -41,6 +50,24 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     G = nx.Graph()
     G.add_nodes_from(nodes)
     G.add_edges_from(edges)
+
+    return G
+
+def _chinese_whispers(G, iterations=10):
+    """ Chinese Whispers Algorithm
+
+    Modified from Alex Loveless' implementation,
+    http://alexloveless.co.uk/data/chinese-whispers-graph-clustering-in-python/
+
+    Inputs:
+        G: graph of facial encodings as nodes and distances as edges
+        iterations: since chinese whispers is an iterative algorithm, number of times to iterate
+
+    Outputs:
+        sorted_clusters: a list of clusters, a cluster being a list of imagepaths,
+            sorted by largest cluster to smallest
+    """
+    from random import shuffle
 
     for _ in range(0, iterations):
         cluster_nodes = G.nodes()
@@ -86,14 +113,42 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     return sorted_clusters
 
 def cluster_facial_encodings(facial_encodings):
+    """ Cluster facial encodings
+
+        Intended to be an optional switch for different clustering algorithms, as of right now
+        only chinese whispers is available.
+
+        Input:
+            facial_encodings: (image_path, facial_encoding) dictionary of facial encodings
+
+        Output:
+            sorted_clusters: a list of clusters, a cluster being a list of imagepaths,
+                sorted by largest cluster to smallest
+
+    """
+
     # Only use the chinese whispers algorithm for now
-    return chinese_whispers(facial_encodings.items())
+    facial_graph = _create_graph_from_encodings(facial_encodings.items())
+    sorted_clusters = _chinese_whispers(facial_graph)
+    return sorted_clusters
 
 def compute_facial_encodings(image_paths):
+    """ Compute Facial Encodings
+
+        Given a set of images, compute the facial encodings of each face detected in the images and
+        return them. If no faces, or more than one face found, return nothing for that image.
+
+        Inputs:
+            image_paths: a list of image paths
+
+        Outputs:
+            facial_encodings: (image_path, facial_encoding) dictionary of facial encodings
+
+    """
     import face_recognition
 
     facial_encodings = {}
-    for idx, image_path in enumerate(image_paths):
+    for image_path in image_paths:
         print "Encoding '{}' ...".format(image_path)
         picture = face_recognition.load_image_file(image_path)
         results = face_recognition.face_encodings(picture)
@@ -106,20 +161,27 @@ def compute_facial_encodings(image_paths):
     return facial_encodings
 
 def main(args):
+    """ Main
+
+    Given a list of images, save out facial encoding data files and copy
+    images into folders of face clusters.
+
+    """
     from glob import glob
     from os.path import join, basename, exists
     from os import makedirs
     import numpy as np
     import shutil
     import sys
-    
+
     if not exists(args.output):
         makedirs(args.output)
+
     # Facial encodings
     image_paths = glob(join(args.input, '*.jpg'))
 
     if len(image_paths) == 0:
-        print("No jpg images found in {}, exiting...".format(args.input))
+        print "No jpg images found in {}, exiting...".format(args.input)
         sys.exit(0)
 
     facial_encodings = compute_facial_encodings(image_paths)
@@ -137,13 +199,11 @@ def main(args):
 
     # Copy image files to cluster folders
     for idx, cluster in enumerate(sorted_clusters):
-        cluster_name = str(idx).zfill(4)
-        cluster_dir = join(args.output, cluster_name)
+        cluster_dir = join(args.output, str(idx).zfill(4))
         if not exists(cluster_dir):
             makedirs(cluster_dir)
         for path in cluster:
-            name = basename(path)
-            shutil.copy(path, join(cluster_dir, name))
+            shutil.copy(path, join(cluster_dir, basename(path)))
 
 def parse_args():
     """Parse input arguments."""
@@ -156,4 +216,5 @@ def parse_args():
     return args
 
 if __name__ == '__main__':
+    """ Entry point """
     main(parse_args())
