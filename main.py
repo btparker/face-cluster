@@ -13,6 +13,7 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
         return []
 
     for idx, face_encoding_to_check in enumerate(encodings):
+        
         # Adding node of facial encoding
         node_id = idx+1
 
@@ -21,6 +22,10 @@ def chinese_whispers(encoding_list, threshold=0.6, iterations=10):
         nodes.append(node)
 
         # Facial encodings to compare
+        if (idx+1) >= len(encodings):
+            # Node is last element, don't create edge
+            break
+
         compare_encodings = encodings[idx+1:]
         distances = _face_distance(compare_encodings, face_encoding_to_check)
         encoding_edges = []
@@ -107,7 +112,9 @@ def main(args):
     import numpy as np
     import shutil
     import sys
-
+    
+    if not exists(args.output):
+        makedirs(args.output)
     # Facial encodings
     image_paths = glob(join(args.input, '*.jpg'))
 
