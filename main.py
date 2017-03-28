@@ -1,18 +1,24 @@
 """ Face Cluster """
+def _chinese_whispers(encoding_list, threshold=0.6, iterations=10):
+    """ Chinese Whispers Algorithm
 
-def _create_graph_from_encodings(encoding_list, threshold=0.6):
-    """ Create Graph from Facial Encodings
+    Modified from Alex Loveless' implementation,
+    http://alexloveless.co.uk/data/chinese-whispers-graph-clustering-in-python/
 
     Inputs:
         encoding_list: a list of facial encodings from face_recognition
         threshold: facial match threshold
+        iterations: since chinese whispers is an iterative algorithm, number of times to iterate
 
     Outputs:
-        G: graph of facial encodings as nodes and distances as edges
+        sorted_clusters: a list of clusters, a cluster being a list of imagepaths,
+            sorted by largest cluster to smallest
     """
+    from random import shuffle
     import networkx as nx
     from face_recognition.api import _face_distance
 
+    # Create graph
     nodes = []
     edges = []
 
@@ -46,29 +52,11 @@ def _create_graph_from_encodings(encoding_list, threshold=0.6):
 
         edges = edges + encoding_edges
 
-    # Create graph
     G = nx.Graph()
     G.add_nodes_from(nodes)
     G.add_edges_from(edges)
 
-    return G
-
-def _chinese_whispers(G, iterations=10):
-    """ Chinese Whispers Algorithm
-
-    Modified from Alex Loveless' implementation,
-    http://alexloveless.co.uk/data/chinese-whispers-graph-clustering-in-python/
-
-    Inputs:
-        G: graph of facial encodings as nodes and distances as edges
-        iterations: since chinese whispers is an iterative algorithm, number of times to iterate
-
-    Outputs:
-        sorted_clusters: a list of clusters, a cluster being a list of imagepaths,
-            sorted by largest cluster to smallest
-    """
-    from random import shuffle
-
+    # Iterate
     for _ in range(0, iterations):
         cluster_nodes = G.nodes()
         shuffle(cluster_nodes)
@@ -127,9 +115,12 @@ def cluster_facial_encodings(facial_encodings):
 
     """
 
+    if len(facial_encodings) <= 1:
+        print "Number of facial encodings must be greater than one, can't cluster"
+        return []
+
     # Only use the chinese whispers algorithm for now
-    facial_graph = _create_graph_from_encodings(facial_encodings.items())
-    sorted_clusters = _chinese_whispers(facial_graph)
+    sorted_clusters = _chinese_whispers(facial_encodings.items())
     return sorted_clusters
 
 def compute_facial_encodings(image_paths):
@@ -148,7 +139,7 @@ def compute_facial_encodings(image_paths):
     import face_recognition
 
     facial_encodings = {}
-    for image_path in image_paths:
+    for idx, image_path in enumerate(image_paths):
         print "Encoding '{}' ...".format(image_path)
         picture = face_recognition.load_image_file(image_path)
         results = face_recognition.face_encodings(picture)
@@ -193,6 +184,10 @@ def main(args):
     # Compute facial clusters, return as sorted
     sorted_clusters = cluster_facial_encodings(facial_encodings)
 
+    print "Created {} clusters:".format(len(sorted_clusters))
+    for idx, cluster in enumerate(sorted_clusters):
+        print "   - cluster {} size {}".format(idx, len(cluster))
+
     # Save clusters
     with open(join(args.output, 'facial_clusters.npy'), 'w') as outfile:
         np.save(outfile, sorted_clusters)
@@ -204,6 +199,8 @@ def main(args):
             makedirs(cluster_dir)
         for path in cluster:
             shutil.copy(path, join(cluster_dir, basename(path)))
+
+    print "Saved results to {}".format(args.output)
 
 def parse_args():
     """Parse input arguments."""
