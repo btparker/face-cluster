@@ -1,5 +1,5 @@
 """ Face Cluster """
-def _chinese_whispers(encoding_list, threshold=0.6, iterations=10):
+def _chinese_whispers(encoding_list, threshold=0.8, iterations=10):
     """ Chinese Whispers Algorithm
 
     Modified from Alex Loveless' implementation,
