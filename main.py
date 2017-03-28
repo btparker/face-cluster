@@ -1,4 +1,5 @@
 """ Face Cluster """
+
 def _chinese_whispers(encoding_list, threshold=0.6, iterations=10):
     """ Chinese Whispers Algorithm
 
@@ -64,7 +65,6 @@ def _chinese_whispers(encoding_list, threshold=0.6, iterations=10):
             neighbors = G[node]
             clusters = {}
 
-            # do an inventory of the given nodes neighbors and edge weights
             for ne in neighbors:
                 if isinstance(ne, int):
                     if G.node[ne]['cluster'] in clusters:
@@ -142,10 +142,20 @@ def compute_facial_encodings(image_paths):
     for idx, image_path in enumerate(image_paths):
         print "Encoding '{}' ...".format(image_path)
         picture = face_recognition.load_image_file(image_path)
-        results = face_recognition.face_encodings(picture)
-        if len(results) == 1:
-            facial_encodings[image_path] = results[0]
-            print "... stored"
+
+        # Find all the faces in the image
+        face_locations = face_recognition.face_locations(picture)
+
+        if len(face_locations) == 1:
+            picture_face_encodings = face_recognition.face_encodings(picture)
+
+            if len(picture_face_encodings) == 1:
+                facial_encodings[image_path] = picture_face_encodings[0]
+                print "... stored"
+
+            else:
+                print "... did not encode face, skipping"
+
         else:
             print "... image does not have just one face, skipping"
 
